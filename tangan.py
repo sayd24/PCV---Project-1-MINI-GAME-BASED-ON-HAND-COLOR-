@@ -92,21 +92,12 @@ class Hasil:
     telunjuk: Optional[Tuple[int, int]] = None
     jempol: Optional[Tuple[int, int]] = None
     jarak_norm: float = 0.0
-    mask: Optional[np.ndarray] = None
     mask_telunjuk: Optional[np.ndarray] = None
     mask_jempol: Optional[np.ndarray] = None
 
     @property
     def ada(self):
         return self.telunjuk is not None and self.jempol is not None
-
-    @property
-    def cx(self):
-        return self.telunjuk[0] if self.telunjuk else 0
-
-    @property
-    def cy(self):
-        return self.telunjuk[1] if self.telunjuk else 0
 
 
 def _mask_warna(hsv, cfg, prefix):
@@ -165,14 +156,13 @@ def deteksi(frame, cfg) -> Hasil:
         full = kosong.copy()
         full[y0:y1, x0:x1] = mask
         full_masks.append(full)
-    combined = cv2.max(full_masks[0], full_masks[1])
 
     jarak_norm = 0.0
     if points[0] is not None and points[1] is not None:
         jarak_norm = float(np.hypot(
             points[0][0] - points[1][0], points[0][1] - points[1][1]
         ) / max(x1 - x0, 1))
-    return Hasil(points[0], points[1], jarak_norm, combined, *full_masks)
+    return Hasil(points[0], points[1], jarak_norm, *full_masks)
 
 
 def gambar_hasil(frame, cfg, hasil: Hasil):

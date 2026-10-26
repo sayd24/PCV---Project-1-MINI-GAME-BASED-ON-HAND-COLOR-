@@ -20,21 +20,26 @@ TRACKBARS = (
 
 
 def rentang_warna_dari_klik(frame, x, y, radius=8):
-    """Ambil rentang HSV robust dari sampel kecil di tengah stiker warna."""
+    """Ambil warna dari pusat klik dengan toleransi untuk variasi pencahayaan."""
     hsv = cv2.cvtColor(cv2.GaussianBlur(frame, (5, 5), 0), cv2.COLOR_BGR2HSV)
     h, w = hsv.shape[:2]
     x, y = int(np.clip(x, 0, w - 1)), int(np.clip(y, 0, h - 1))
     patch = hsv[max(0, y - radius):min(h, y + radius + 1),
                 max(0, x - radius):min(w, x + radius + 1)].reshape(-1, 3).astype(float)
-    angles = patch[:, 0] * (2 * math.pi / 180)
+    pusat = hsv[max(0, y - 2):min(h, y + 3),
+                max(0, x - 2):min(w, x + 3)].reshape(-1, 3).astype(float)
+    angles = pusat[:, 0] * (2 * math.pi / 180)
     hue_center = math.atan2(np.sin(angles).mean(), np.cos(angles).mean())
     center = (hue_center * 180 / (2 * math.pi)) % 180
-    hue_delta = np.abs((patch[:, 0] - center + 90) % 180 - 90)
+    hue_delta = np.abs((pusat[:, 0] - center + 90) % 180 - 90)
     hue_width = int(np.clip(np.percentile(hue_delta, 90) + 3, 4, 12))
-    s_min = int(np.clip(np.percentile(patch[:, 1], 10) - 35, 0, 255))
-    s_max = int(np.clip(np.percentile(patch[:, 1], 90) + 35, 0, 255))
-    v_min = int(np.clip(np.percentile(patch[:, 2], 10) - 40, 0, 255))
-    v_max = int(np.clip(np.percentile(patch[:, 2], 90) + 40, 0, 255))
+    cocok = patch[np.abs((patch[:, 0] - center + 90) % 180 - 90) <= hue_width * 2]
+    if not len(cocok):
+        cocok = pusat
+    s_min = int(np.clip(np.percentile(cocok[:, 1], 10) - 35, 0, 255))
+    s_max = int(np.clip(np.percentile(cocok[:, 1], 90) + 35, 0, 255))
+    v_min = int(np.clip(np.percentile(cocok[:, 2], 10) - 40, 0, 255))
+    v_max = int(np.clip(np.percentile(cocok[:, 2], 90) + 40, 0, 255))
     center_hue = int(round(center)) % 180
     return {
         "h_min": (center_hue - hue_width) % 180,

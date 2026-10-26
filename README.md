@@ -8,6 +8,8 @@ Kamera melacak penanda dengan warna berbeda pada telunjuk dan jempol. OpenCV men
 
 Saat jari dirapatkan, power terisi. Saat dibuka kembali, bola ditembakkan. Bola bergerak dan memantul dari tembok menggunakan simulasi sederhana di Pygame.
 
+Permainan dimulai dengan waktu 1 menit dan batas 9 pukulan. Setiap bola yang masuk menambah waktu 20 detik. Permainan selesai jika waktu habis atau batas pukulan tercapai.
+
 ## Menjalankan
 
 Pasang dependensi:
@@ -44,5 +46,8 @@ Simpan gambar PNG di folder `assets/`:
 - `bola.png` untuk bola
 - `lubang.png` untuk lubang
 - `tembok.png` untuk tembok
+- `babak.png`, `sisapukulan.png`, dan `waktu.png` untuk panel informasi game
 
-Jika gambar tidak tersedia, game menggunakan tampilan sederhana sebagai pengganti.
+Panel babak, sisa pukulan, dan waktu berada di area atas jendela game; ukuran lapangannya tetap 800×600. Preview kamera dan mask dibuat ringkas dan ditampilkan berdampingan dengan game.
+
+Tambahkan `font.ttf` di folder `assets/` jika ingin memakai font khusus pada panel game. Jika tidak ada, game memakai font bawaan Pygame. Gambar aset yang tidak tersedia akan memakai tampilan sederhana sebagai pengganti.

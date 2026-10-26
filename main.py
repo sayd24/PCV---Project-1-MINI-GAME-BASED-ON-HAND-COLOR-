@@ -5,13 +5,19 @@ import time
 from pathlib import Path
 
 import cv2
+import numpy as np
 import pygame
 
 from tangan import (Gestur, Hasil, PembacaGestur, buka_kamera, deteksi, gambar_hasil,
                     kalibrasi_lengkap, load_config)
 
 # Pengaturan game.
-W, H, FPS = 800, 600, 60
+W, H, FPS = 800, 600, 120
+HUD_HEIGHT = 118
+HUD_PANEL_SIZE = (184, 110)
+HUD_POSITIONS = (108, 308, 508)
+PREVIEW_SIZE = (240, 180)
+HUD_FONT_FILE = "font.ttf"
 R_BOLA, R_LUBANG = 10, 14
 DINDING_PINGGIR = 20
 DINDING_TEPI = [
@@ -41,6 +47,9 @@ POWER_SPEED = 840.0
 PANAH_MIN, PANAH_MAX = 40, 220
 BATAL_JIKA_HILANG = 0.6
 KECEPATAN_MASUK_LUBANG = 250.0
+WAKTU_AWAL = 60.0
+BONUS_WAKTU = 20.0
+BATAS_PUKULAN = 9
 
 
 # Posisi ronde dan aset.
@@ -70,6 +79,41 @@ def muat_aset(nama, ukuran):
         return None
     gambar = pygame.image.load(str(path)).convert_alpha()
     return pygame.transform.smoothscale(gambar, ukuran)
+
+
+def muat_panel(nama):
+    path = ASSET_DIR / nama
+    if not path.is_file():
+        return None
+    gambar = pygame.image.load(str(path)).convert_alpha()
+    alpha = pygame.surfarray.array_alpha(gambar)
+    isi = np.flatnonzero(np.count_nonzero(alpha > 32, axis=0) > gambar.get_width() * 0.12)
+    if isi.size:
+        atas = max(0, int(isi[0]) - 28)
+        bawah = min(gambar.get_height(), int(isi[-1]) + 17)
+        gambar = gambar.subsurface((0, atas, gambar.get_width(), bawah - atas)).copy()
+    return pygame.transform.smoothscale(gambar, HUD_PANEL_SIZE)
+
+
+def muat_font(ukuran):
+    path = ASSET_DIR / HUD_FONT_FILE
+    return pygame.font.Font(str(path) if path.is_file() else None, ukuran)
+
+
+def gambar_panel(layar, gambar, x, judul, nilai, font, font_nilai):
+    if gambar:
+        layar.blit(gambar, (x, 4))
+
+    tengah_x = x + HUD_PANEL_SIZE[0] * 0.64
+    for teks, font_teks, posisi_y in (
+        (judul, font, 3 + HUD_PANEL_SIZE[1] * 0.41),
+        (nilai, font_nilai, 3 + HUD_PANEL_SIZE[1] * 0.64),
+    ):
+        tulisan = font_teks.render(teks, True, (255, 244, 214))
+        rect = tulisan.get_rect(center=(tengah_x, posisi_y))
+        bayangan = font_teks.render(teks, True, (48, 23, 9))
+        layar.blit(bayangan, rect.move(1, 2))
+        layar.blit(tulisan, rect)
 
 
 # Fisika bola.
@@ -144,6 +188,7 @@ class InputKamera:
             raise RuntimeError('Kamera gagal dibuka. Ubah "kamera" di config.json (0, 1, 2...).')
         self.pembaca = PembacaGestur(self.cfg)
         self.preview = preview
+        self.preview_window_ready = False
 
     def baca(self) -> Gestur:
         ok, frame = self.cap.read()
@@ -155,10 +200,28 @@ class InputKamera:
         if self.preview:
             gambar_hasil(frame, self.cfg, hasil)
             status = ("TAHAN POWER" if g.kepal else "BIDIK") if g.ada else "dua penanda tidak terdeteksi"
-            cv2.putText(frame, f"{status}  jarak={hasil.jarak_norm:.3f}", (10, 25),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2)
-            cv2.imshow("Kamera", frame)
+            preview = cv2.resize(frame, PREVIEW_SIZE)
+            mask = np.zeros_like(frame)
+            if hasil.mask_telunjuk is not None:
+                mask[hasil.mask_telunjuk > 0] = (0, 220, 0)
+            if hasil.mask_jempol is not None:
+                mask[hasil.mask_jempol > 0] = (220, 0, 220)
+            mask = cv2.resize(mask, PREVIEW_SIZE)
+            cv2.putText(mask, status, (8, 25),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.65, (0, 255, 255), 2)
+            cv2.putText(mask, f"Jarak: {hasil.jarak_norm:.3f}", (8, 52),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
+            cv2.putText(mask, "Hijau: telunjuk | Ungu: jempol", (6, 151),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.32, (255, 255, 255), 1)
+            cv2.putText(mask, "Rapatkan: isi power | Buka: tembak", (6, 172),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.29, (255, 255, 255), 1)
+            cv2.imshow("Kamera", np.hstack((preview, mask)))
+            if not self.preview_window_ready:
+                cv2.moveWindow("Kamera", W + 16, 0)
+                self.preview_window_ready = True
             cv2.waitKey(1)
+            if cv2.getWindowProperty("Kamera", cv2.WND_PROP_VISIBLE) < 1:
+                self.preview = False
         return g
 
     def tutup(self):
@@ -193,10 +256,14 @@ def gambar_panah(layar, mulai, arah, panjang, warna):
 
 def jalankan(sumber, max_detik=None):
     pygame.init()
-    layar = pygame.display.set_mode((W, H))
+    layar = pygame.display.set_mode((W, H + HUD_HEIGHT))
     pygame.display.set_caption("Mini-Golf Tangan")
+    area = layar.subsurface((0, HUD_HEIGHT, W, H))
     jam = pygame.time.Clock()
-    font, besar = pygame.font.SysFont(None, 26), pygame.font.SysFont(None, 54)
+    font, font_nilai = muat_font(18), muat_font(30)
+    font.set_bold(True)
+    font_nilai.set_bold(True)
+    besar = muat_font(54)
 
     posisi_awal, posisi_lubang = spawn_ronde()
     lubang = pygame.Vector2(posisi_lubang)
@@ -204,35 +271,61 @@ def jalankan(sumber, max_detik=None):
     arah = (lubang - bola.pos).normalize()
     kunci = pygame.Vector2(arah)
     state, power, naik = "bidik", MIN_POWER, 1
-    pukulan, menang, waktu_menang = 0, 0, 0.0
-    mulai = time.time()
+    pukulan, total_pukulan, menang = 0, 0, 0
+    bonus_waktu = 0.0
+    waktu_menang = 0.0
+    alasan_selesai = ""
     gambar_lapangan = muat_aset("rumput.png", (W, H))
     gambar_bola = muat_aset("bola.png", (R_BOLA * 2, R_BOLA * 2))
     gambar_lubang = muat_aset("lubang.png", (R_LUBANG * 2, R_LUBANG * 2))
     gambar_dinding = [muat_aset("tembok.png", d.size) for d in DINDING]
     gambar_tepi = [muat_aset("tembok.png", d.size) for d in DINDING_TEPI]
+    gambar_hud = [
+        muat_panel("babak.png"),
+        muat_panel("sisapukulan.png"),
+        muat_panel("waktu.png"),
+    ]
+    mulai = time.monotonic()
 
     try:
         while True:
             dt = min(jam.tick(FPS) / 1000.0, 0.05)
+            sekarang = time.monotonic()
+            sisa_waktu = max(0.0, WAKTU_AWAL + bonus_waktu - (sekarang - mulai))
             for ev in pygame.event.get():
                 if ev.type == pygame.QUIT or (ev.type == pygame.KEYDOWN and ev.key == pygame.K_ESCAPE):
-                    return {"pukulan": pukulan, "menang": menang}
+                    return {
+                        "pukulan": total_pukulan,
+                        "menang": menang,
+                        "waktu_sisa": sisa_waktu,
+                        "bonus_waktu": bonus_waktu,
+                        "status": alasan_selesai or state,
+                    }
             g = sumber.baca()
 
-            if state == "menang":
-                if time.time() - waktu_menang > 2.5:
-                    posisi_awal, posisi_lubang = spawn_ronde()
-                    bola = Bola(posisi_awal)
-                    lubang = pygame.Vector2(posisi_lubang)
-                    arah = (lubang - bola.pos).normalize()
-                    kunci = pygame.Vector2(arah)
-                    pukulan, state = 0, "bidik"
+            if state != "selesai" and sisa_waktu <= 0:
+                state, alasan_selesai = "selesai", "WAKTU HABIS"
+            elif state == "menang":
+                if sekarang - waktu_menang > 2.5:
+                    if total_pukulan >= BATAS_PUKULAN:
+                        state, alasan_selesai = "selesai", "BATAS PUKULAN TERCAPAI"
+                    else:
+                        posisi_awal, posisi_lubang = spawn_ronde()
+                        bola = Bola(posisi_awal)
+                        lubang = pygame.Vector2(posisi_lubang)
+                        arah = (lubang - bola.pos).normalize()
+                        kunci = pygame.Vector2(arah)
+                        pukulan, state = 0, "bidik"
+            elif state == "selesai":
+                pass
             elif not bola.diam:
                 state = "jalan"
             else:
                 if state == "jalan":
-                    state = "bidik"
+                    if total_pukulan >= BATAS_PUKULAN:
+                        state, alasan_selesai = "selesai", "BATAS PUKULAN TERCAPAI"
+                    else:
+                        state = "bidik"
                 if state == "bidik":
                     if g.ada:
                         if g.arah_x is not None and g.arah_y is not None:
@@ -252,6 +345,7 @@ def jalankan(sumber, max_detik=None):
                     elif not g.kepal:
                         bola.vel = kunci * power
                         pukulan += 1
+                        total_pukulan += 1
                         state = "jalan"
                     else:
                         power += POWER_SPEED * dt * naik
@@ -260,59 +354,74 @@ def jalankan(sumber, max_detik=None):
                         elif power <= MIN_POWER:
                             power, naik = MIN_POWER, 1
 
-            if state != "menang":
+            if state not in ("menang", "selesai"):
                 bola.langkah(dt)
                 if bola.pos.distance_to(lubang) <= R_LUBANG and bola.vel.length() < KECEPATAN_MASUK_LUBANG:
                     bola.pos, bola.vel = pygame.Vector2(lubang), pygame.Vector2(0, 0)
-                    state, menang, waktu_menang = "menang", menang + 1, time.time()
+                    state, menang, waktu_menang = "menang", menang + 1, sekarang
+                    bonus_waktu += BONUS_WAKTU
 
+            layar.fill((22, 36, 31))
+            area.fill((28, 43, 27))
             if gambar_lapangan:
-                layar.blit(gambar_lapangan, (0, 0))
+                area.blit(gambar_lapangan, (0, 0))
             else:
-                layar.fill((0, 100, 0))
+                pygame.draw.rect(area, (0, 100, 0), (0, 0, W, H))
             for d, gambar in zip(DINDING_TEPI, gambar_tepi):
                 if gambar:
-                    layar.blit(gambar, d.topleft)
+                    area.blit(gambar, d.topleft)
                 else:
-                    pygame.draw.rect(layar, (160, 82, 45), d)
+                    pygame.draw.rect(area, (160, 82, 45), d)
             for d, gambar in zip(DINDING, gambar_dinding):
                 if gambar:
-                    layar.blit(gambar, d.topleft)
+                    area.blit(gambar, d.topleft)
                 else:
-                    pygame.draw.rect(layar, (160, 82, 45), d)
+                    pygame.draw.rect(area, (160, 82, 45), d)
             if gambar_lubang:
-                layar.blit(gambar_lubang, gambar_lubang.get_rect(center=lubang))
+                area.blit(gambar_lubang, gambar_lubang.get_rect(center=lubang))
             else:
-                pygame.draw.circle(layar, (0, 0, 0), lubang, R_LUBANG)
+                pygame.draw.circle(area, (0, 0, 0), lubang, R_LUBANG)
             if gambar_bola:
-                layar.blit(gambar_bola, gambar_bola.get_rect(center=bola.pos))
+                area.blit(gambar_bola, gambar_bola.get_rect(center=bola.pos))
             else:
-                pygame.draw.circle(layar, (255, 255, 255), bola.pos, R_BOLA)
+                pygame.draw.circle(area, (255, 255, 255), bola.pos, R_BOLA)
 
             if state in ("bidik", "isi"):
                 p = (power - MIN_POWER) / (MAX_POWER - MIN_POWER) if state == "isi" else 0.0
                 panjang = PANAH_MIN + (PANAH_MAX - PANAH_MIN) * p
                 warna = (int(255 * p), int(220 * (1 - p)) + 35, 0) if state == "isi" else (255, 255, 0)
-                gambar_panah(layar, bola.pos + (kunci if state == "isi" else arah) * (R_BOLA + 4),
+                gambar_panah(area, bola.pos + (kunci if state == "isi" else arah) * (R_BOLA + 4),
                              kunci if state == "isi" else arah, panjang, warna)
             if state == "isi":
-                pygame.draw.rect(layar, (110, 110, 110), (20, 20, 200, 20))
-                pygame.draw.rect(layar, (50, 220, 50), (20, 20, int(200 * p), 20))
-                pygame.draw.rect(layar, (255, 255, 255), (20, 20, 200, 20), 2)
+                pygame.draw.rect(area, (110, 110, 110), (20, 20, 200, 20))
+                pygame.draw.rect(area, (50, 220, 50), (20, 20, int(200 * p), 20))
+                pygame.draw.rect(area, (255, 255, 255), (20, 20, 200, 20), 2)
 
-            mode_teks = {"bidik": "BIDIK", "isi": "TAHAN POWER",
-                         "jalan": "BOLA BERGERAK", "menang": "MENANG"}[state]
-            info = f"Pukulan: {pukulan}   Mode: {mode_teks}   Jari: {'terdeteksi' if g.ada else 'HILANG'}"
-            layar.blit(font.render(info, True, (255, 255, 255)), (20, H - 55))
-            layar.blit(font.render("Geser telunjuk = bidik | rapatkan jari = tahan power | buka = tembak",
-                                   True, (230, 230, 230)), (20, H - 28))
+            panel_ui = (
+                ("Babak", str(menang + 1)),
+                ("Sisa Pukulan", str(max(0, BATAS_PUKULAN - total_pukulan))),
+                ("Waktu", f"{int(sisa_waktu) // 60:02}:{int(sisa_waktu) % 60:02}"),
+            )
+            for gambar, x, (judul, nilai) in zip(gambar_hud, HUD_POSITIONS, panel_ui):
+                gambar_panel(layar, gambar, x, judul, nilai, font, font_nilai)
             if state == "menang":
                 t = besar.render(f"HOLE IN! ({pukulan} pukulan)", True, (255, 215, 0))
-                layar.blit(t, t.get_rect(center=(W // 2, H // 2)))
+                area.blit(t, t.get_rect(center=(W // 2, H // 2)))
+            elif state == "selesai":
+                t = besar.render("PERMAINAN SELESAI", True, (255, 215, 0))
+                area.blit(t, t.get_rect(center=(W // 2, H // 2 - 25)))
+                alasan = font.render("Tekan Esc untuk keluar", True, (255, 255, 255))
+                area.blit(alasan, alasan.get_rect(center=(W // 2, H // 2 + 20)))
             pygame.display.flip()
 
-            if max_detik is not None and time.time() - mulai > max_detik:
-                return {"pukulan": pukulan, "menang": menang}
+            if max_detik is not None and sekarang - mulai > max_detik:
+                return {
+                    "pukulan": total_pukulan,
+                    "menang": menang,
+                    "waktu_sisa": sisa_waktu,
+                    "bonus_waktu": bonus_waktu,
+                    "status": alasan_selesai or state,
+                }
     finally:
         sumber.tutup()
         pygame.quit()
