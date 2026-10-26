@@ -10,7 +10,9 @@ KONTROL (dua penanda di dalam ROI biru pada jendela kamera)
 """
 import argparse
 import math
+import random
 import time
+from pathlib import Path
 
 import cv2
 import pygame
@@ -20,9 +22,23 @@ from tangan import (Gestur, Hasil, PembacaGestur, buka_kamera, deteksi, gambar_h
 
 W, H, FPS = 800, 600, 60
 R_BOLA, R_LUBANG = 10, 14
-START, LUBANG = (100, 500), (700, 100)
-DINDING = [pygame.Rect(200, 150, 20, 300), pygame.Rect(400, 0, 20, 250),
-           pygame.Rect(600, 200, 20, 400)]
+DINDING = [
+    pygame.Rect(80, 300, 115, 18),
+    pygame.Rect(180, 95, 18, 185),
+    pygame.Rect(180, 355, 18, 150),
+    pygame.Rect(275, 0, 18, 130),
+    pygame.Rect(275, 210, 18, 180),
+    pygame.Rect(275, 470, 18, 130),
+    pygame.Rect(310, 300, 80, 18),
+    pygame.Rect(390, 85, 18, 165),
+    pygame.Rect(390, 330, 18, 190),
+    pygame.Rect(430, 230, 95, 18),
+    pygame.Rect(505, 0, 18, 165),
+    pygame.Rect(505, 250, 18, 190),
+    pygame.Rect(505, 500, 18, 100),
+    pygame.Rect(565, 390, 150, 18),
+]
+ASSET_DIR = Path(__file__).resolve().parent / "assets"
 
 FRIKSI = 0.98                    # per 1/60 detik (disesuaikan dengan dt)
 BERHENTI_DI_BAWAH = 6.0          # px/detik
@@ -32,6 +48,34 @@ POWER_SPEED = 840.0              # satuan power per detik saat kepal ditahan
 PANAH_MIN, PANAH_MAX = 40, 220
 BATAL_JIKA_HILANG = 0.6          # detik
 KECEPATAN_MASUK_LUBANG = 250.0   # px/detik
+
+
+def posisi_spawn_aman(radius):
+    batas_x = (radius + 20, W - radius - 20)
+    batas_y = (radius + 20, H - radius - 20)
+    for _ in range(500):
+        posisi = pygame.Vector2(random.uniform(*batas_x), random.uniform(*batas_y))
+        if not any(dinding.inflate(radius * 2, radius * 2).collidepoint(posisi)
+                   for dinding in DINDING):
+            return posisi
+    raise RuntimeError("Tidak menemukan posisi spawn aman. Periksa susunan tembok.")
+
+
+def spawn_ronde():
+    for _ in range(500):
+        mulai = posisi_spawn_aman(R_BOLA + 8)
+        lubang = posisi_spawn_aman(R_LUBANG + 8)
+        if mulai.distance_to(lubang) >= 320:
+            return mulai, lubang
+    raise RuntimeError("Tidak menemukan pasangan posisi spawn yang cukup berjauhan.")
+
+
+def muat_aset(nama, ukuran):
+    path = ASSET_DIR / nama
+    if not path.is_file():
+        return None
+    gambar = pygame.image.load(str(path)).convert_alpha()
+    return pygame.transform.smoothscale(gambar, ukuran)
 
 
 # --------------------------------------------------------------------------- #
@@ -169,13 +213,18 @@ def jalankan(sumber, max_detik=None):
     jam = pygame.time.Clock()
     font, besar = pygame.font.SysFont(None, 26), pygame.font.SysFont(None, 54)
 
-    lubang = pygame.Vector2(LUBANG)
-    bola = Bola(START)
+    posisi_awal, posisi_lubang = spawn_ronde()
+    lubang = pygame.Vector2(posisi_lubang)
+    bola = Bola(posisi_awal)
     arah = (lubang - bola.pos).normalize()
     kunci = pygame.Vector2(arah)
     state, power, naik = "bidik", MIN_POWER, 1
     pukulan, menang, waktu_menang = 0, 0, 0.0
     mulai = time.time()
+    gambar_lapangan = muat_aset("rumput.png", (W, H))
+    gambar_bola = muat_aset("bola.png", (R_BOLA * 2, R_BOLA * 2))
+    gambar_lubang = muat_aset("lubang.png", (R_LUBANG * 2, R_LUBANG * 2))
+    gambar_dinding = [muat_aset("tembok.png", d.size) for d in DINDING]
 
     try:
         while True:
@@ -188,7 +237,12 @@ def jalankan(sumber, max_detik=None):
             # ---------------- logika tembakan ----------------
             if state == "menang":
                 if time.time() - waktu_menang > 2.5:
-                    bola, pukulan, state = Bola(START), 0, "bidik"
+                    posisi_awal, posisi_lubang = spawn_ronde()
+                    bola = Bola(posisi_awal)
+                    lubang = pygame.Vector2(posisi_lubang)
+                    arah = (lubang - bola.pos).normalize()
+                    kunci = pygame.Vector2(arah)
+                    pukulan, state = 0, "bidik"
             elif not bola.diam:
                 state = "jalan"
             else:
@@ -231,11 +285,23 @@ def jalankan(sumber, max_detik=None):
                     state, menang, waktu_menang = "menang", menang + 1, time.time()
 
             # ---------------- gambar ----------------
-            layar.fill((0, 100, 0))
-            for d in DINDING:
-                pygame.draw.rect(layar, (160, 82, 45), d)
-            pygame.draw.circle(layar, (0, 0, 0), lubang, R_LUBANG)
-            pygame.draw.circle(layar, (255, 255, 255), bola.pos, R_BOLA)
+            if gambar_lapangan:
+                layar.blit(gambar_lapangan, (0, 0))
+            else:
+                layar.fill((0, 100, 0))
+            for d, gambar in zip(DINDING, gambar_dinding):
+                if gambar:
+                    layar.blit(gambar, d.topleft)
+                else:
+                    pygame.draw.rect(layar, (160, 82, 45), d)
+            if gambar_lubang:
+                layar.blit(gambar_lubang, gambar_lubang.get_rect(center=lubang))
+            else:
+                pygame.draw.circle(layar, (0, 0, 0), lubang, R_LUBANG)
+            if gambar_bola:
+                layar.blit(gambar_bola, gambar_bola.get_rect(center=bola.pos))
+            else:
+                pygame.draw.circle(layar, (255, 255, 255), bola.pos, R_BOLA)
 
             if state in ("bidik", "isi"):
                 p = (power - MIN_POWER) / (MAX_POWER - MIN_POWER) if state == "isi" else 0.0

@@ -32,6 +32,17 @@ Gunakan cahaya yang sama saat bermain, dan jaga agar kedua penanda tampak oleh k
 - Jari terbuka: panah mengikuti garis lurus dari jempol menuju telunjuk.
 - Rapatkan telunjuk dan jempol lalu tahan: arah terkunci dan power terisi.
 - Buka kembali: tembak.
+- Setelah bola masuk lubang, posisi titik pukul dan lubang berpindah secara acak untuk ronde berikutnya.
+- Rintangan tembok dibuat lebih banyak dengan susunan dan orientasi yang bervariasi.
+
+## Aset game
+Simpan gambar PNG transparan di folder `assets/` dengan nama berikut:
+- `rumput.png` untuk tekstur rumput seluruh lapangan (ukuran akan disesuaikan ke jendela game).
+- `bola.png` untuk bola.
+- `lubang.png` untuk lubang.
+- `tembok.png` untuk seluruh tembok.
+
+Gambar akan disesuaikan ukurannya oleh game. Jika aset belum tersedia, game tetap menggunakan latar hijau atau bentuk sederhana sebagai pengganti.
 
 ## Jika bermasalah
 | Gejala | Coba |
