@@ -1,13 +1,3 @@
-"""Mini-Golf dikontrol dua jari bertanda warna.
-
-    python main.py              # pakai webcam (kalibrasi dulu: python kalibrasi.py)
-    python main.py --keyboard   # tanpa kamera: <- -> bidik, tahan SPASI = kepal
-
-KONTROL (dua penanda di dalam ROI biru pada jendela kamera)
-  * Jari terbuka  : geser telunjuk kiri-kanan untuk membidik
-  * Jari dirapatkan dan ditahan : isi power
-  * Buka kembali  : tembak
-"""
 import argparse
 import math
 import random
@@ -20,39 +10,43 @@ import pygame
 from tangan import (Gestur, Hasil, PembacaGestur, buka_kamera, deteksi, gambar_hasil,
                     kalibrasi_lengkap, load_config)
 
+# Pengaturan game.
 W, H, FPS = 800, 600, 60
 R_BOLA, R_LUBANG = 10, 14
+DINDING_PINGGIR = 20
+DINDING_TEPI = [
+    pygame.Rect(0, 0, W, DINDING_PINGGIR),
+    pygame.Rect(0, H - DINDING_PINGGIR, W, DINDING_PINGGIR),
+    pygame.Rect(0, DINDING_PINGGIR, DINDING_PINGGIR, H - DINDING_PINGGIR * 2),
+    pygame.Rect(W - DINDING_PINGGIR, DINDING_PINGGIR,
+                DINDING_PINGGIR, H - DINDING_PINGGIR * 2),
+]
 DINDING = [
-    pygame.Rect(80, 300, 115, 18),
-    pygame.Rect(180, 95, 18, 185),
-    pygame.Rect(180, 355, 18, 150),
-    pygame.Rect(275, 0, 18, 130),
-    pygame.Rect(275, 210, 18, 180),
-    pygame.Rect(275, 470, 18, 130),
-    pygame.Rect(310, 300, 80, 18),
-    pygame.Rect(390, 85, 18, 165),
-    pygame.Rect(390, 330, 18, 190),
-    pygame.Rect(430, 230, 95, 18),
-    pygame.Rect(505, 0, 18, 165),
-    pygame.Rect(505, 250, 18, 190),
-    pygame.Rect(505, 500, 18, 100),
-    pygame.Rect(565, 390, 150, 18),
+    pygame.Rect(145, 82, 132, 18), pygame.Rect(92, 190, 18, 142),
+    pygame.Rect(220, 228, 115, 18), pygame.Rect(158, 404, 155, 18),
+    pygame.Rect(342, 36, 18, 158), pygame.Rect(378, 276, 112, 18),
+    pygame.Rect(344, 382, 18, 150), pygame.Rect(475, 112, 145, 18),
+    pygame.Rect(520, 185, 18, 132), pygame.Rect(438, 468, 138, 18),
+    pygame.Rect(654, 66, 18, 148), pygame.Rect(610, 346, 132, 18),
+    pygame.Rect(704, 428, 18, 126), pygame.Rect(80, 510, 18, 76),
+    pygame.Rect(260, 108, 18, 72), pygame.Rect(570, 492, 110, 18),
 ]
 ASSET_DIR = Path(__file__).resolve().parent / "assets"
 
-FRIKSI = 0.98                    # per 1/60 detik (disesuaikan dengan dt)
-BERHENTI_DI_BAWAH = 6.0          # px/detik
+FRIKSI = 0.98
+BERHENTI_DI_BAWAH = 6.0
 RESTITUSI = 0.8
-MIN_POWER, MAX_POWER = 120.0, 1200.0     # px/detik
-POWER_SPEED = 840.0              # satuan power per detik saat kepal ditahan
+MIN_POWER, MAX_POWER = 120.0, 1200.0
+POWER_SPEED = 840.0
 PANAH_MIN, PANAH_MAX = 40, 220
-BATAL_JIKA_HILANG = 0.6          # detik
-KECEPATAN_MASUK_LUBANG = 250.0   # px/detik
+BATAL_JIKA_HILANG = 0.6
+KECEPATAN_MASUK_LUBANG = 250.0
 
 
+# Posisi ronde dan aset.
 def posisi_spawn_aman(radius):
-    batas_x = (radius + 20, W - radius - 20)
-    batas_y = (radius + 20, H - radius - 20)
+    batas_x = (radius + DINDING_PINGGIR + 8, W - radius - DINDING_PINGGIR - 8)
+    batas_y = (radius + DINDING_PINGGIR + 8, H - radius - DINDING_PINGGIR - 8)
     for _ in range(500):
         posisi = pygame.Vector2(random.uniform(*batas_x), random.uniform(*batas_y))
         if not any(dinding.inflate(radius * 2, radius * 2).collidepoint(posisi)
@@ -78,9 +72,7 @@ def muat_aset(nama, ukuran):
     return pygame.transform.smoothscale(gambar, ukuran)
 
 
-# --------------------------------------------------------------------------- #
-# Fisika
-# --------------------------------------------------------------------------- #
+# Fisika bola.
 class Bola:
     def __init__(self, pos):
         self.pos = pygame.Vector2(pos)
@@ -96,17 +88,17 @@ class Bola:
             self.vel = self.vel - (1 + RESTITUSI) * vn * normal
 
     def _tabrak_batas(self):
-        if self.pos.x < R_BOLA:
-            self.pos.x = R_BOLA
+        if self.pos.x < DINDING_PINGGIR + R_BOLA:
+            self.pos.x = DINDING_PINGGIR + R_BOLA
             self._pantul(pygame.Vector2(1, 0))
-        elif self.pos.x > W - R_BOLA:
-            self.pos.x = W - R_BOLA
+        elif self.pos.x > W - DINDING_PINGGIR - R_BOLA:
+            self.pos.x = W - DINDING_PINGGIR - R_BOLA
             self._pantul(pygame.Vector2(-1, 0))
-        if self.pos.y < R_BOLA:
-            self.pos.y = R_BOLA
+        if self.pos.y < DINDING_PINGGIR + R_BOLA:
+            self.pos.y = DINDING_PINGGIR + R_BOLA
             self._pantul(pygame.Vector2(0, 1))
-        elif self.pos.y > H - R_BOLA:
-            self.pos.y = H - R_BOLA
+        elif self.pos.y > H - DINDING_PINGGIR - R_BOLA:
+            self.pos.y = H - DINDING_PINGGIR - R_BOLA
             self._pantul(pygame.Vector2(0, -1))
 
     def _tabrak_rect(self, rect):
@@ -119,7 +111,7 @@ class Bola:
         if jarak > 1e-9:
             normal = delta / jarak
             self.pos = terdekat + normal * R_BOLA
-        else:                                  # pusat bola di dalam dinding: dorong keluar
+        else:
             celah = {(-1, 0): self.pos.x - rect.left, (1, 0): rect.right - self.pos.x,
                      (0, -1): self.pos.y - rect.top, (0, 1): rect.bottom - self.pos.y}
             (nx, ny), g = min(celah.items(), key=lambda kv: kv[1])
@@ -133,7 +125,7 @@ class Bola:
         if v < BERHENTI_DI_BAWAH:
             self.vel = pygame.Vector2(0, 0)
             return
-        n = max(1, math.ceil(v * dt / (R_BOLA * 0.5)))      # cegah menembus dinding tipis
+        n = max(1, math.ceil(v * dt / (R_BOLA * 0.5)))
         for _ in range(n):
             self.pos = self.pos + self.vel * dt / n
             self._tabrak_batas()
@@ -141,9 +133,7 @@ class Bola:
                 self._tabrak_rect(d)
 
 
-# --------------------------------------------------------------------------- #
-# Sumber input (game hanya butuh .baca() -> Gestur)
-# --------------------------------------------------------------------------- #
+# Input kamera dan keyboard.
 class InputKamera:
     def __init__(self, preview=True):
         self.cfg = load_config()
@@ -178,7 +168,7 @@ class InputKamera:
 
 class InputKeyboard:
     def __init__(self):
-        self.x = 0.41            # kira-kira mengarah ke lubang
+        self.x = 0.41
 
     def baca(self) -> Gestur:
         k = pygame.key.get_pressed()
@@ -192,9 +182,7 @@ class InputKeyboard:
         pass
 
 
-# --------------------------------------------------------------------------- #
-# Tampilan
-# --------------------------------------------------------------------------- #
+# Tampilan dan loop permainan.
 def gambar_panah(layar, mulai, arah, panjang, warna):
     ujung = mulai + arah * panjang
     dasar = ujung - arah * 18
@@ -203,9 +191,6 @@ def gambar_panah(layar, mulai, arah, panjang, warna):
     pygame.draw.polygon(layar, warna, [ujung, dasar + tegak * 10, dasar - tegak * 10])
 
 
-# --------------------------------------------------------------------------- #
-# Loop game
-# --------------------------------------------------------------------------- #
 def jalankan(sumber, max_detik=None):
     pygame.init()
     layar = pygame.display.set_mode((W, H))
@@ -225,6 +210,7 @@ def jalankan(sumber, max_detik=None):
     gambar_bola = muat_aset("bola.png", (R_BOLA * 2, R_BOLA * 2))
     gambar_lubang = muat_aset("lubang.png", (R_LUBANG * 2, R_LUBANG * 2))
     gambar_dinding = [muat_aset("tembok.png", d.size) for d in DINDING]
+    gambar_tepi = [muat_aset("tembok.png", d.size) for d in DINDING_TEPI]
 
     try:
         while True:
@@ -234,7 +220,6 @@ def jalankan(sumber, max_detik=None):
                     return {"pukulan": pukulan, "menang": menang}
             g = sumber.baca()
 
-            # ---------------- logika tembakan ----------------
             if state == "menang":
                 if time.time() - waktu_menang > 2.5:
                     posisi_awal, posisi_lubang = spawn_ronde()
@@ -251,17 +236,14 @@ def jalankan(sumber, max_detik=None):
                 if state == "bidik":
                     if g.ada:
                         if g.arah_x is not None and g.arah_y is not None:
-                            # Arah bidik mengikuti garis dari jempol (belakang) ke telunjuk (depan).
                             target = pygame.Vector2(g.arah_x, g.arah_y)
                         else:
-                            # Input keyboard tetap memakai posisi horizontal sebagai arah.
                             a = math.radians(-180 + 360 * g.x_norm)
                             target = pygame.Vector2(math.cos(a), math.sin(a))
                         baru = arah * 0.25 + target * 0.75
                         if baru.length() > 1e-6:
                             arah = baru.normalize()
                     if g.ada and g.kepal:
-                        # Kunci arah terbaru sebelum mulai mengisi power.
                         kunci = pygame.Vector2(arah)
                         state, power, naik = "isi", MIN_POWER, 1
                 elif state == "isi":
@@ -284,11 +266,15 @@ def jalankan(sumber, max_detik=None):
                     bola.pos, bola.vel = pygame.Vector2(lubang), pygame.Vector2(0, 0)
                     state, menang, waktu_menang = "menang", menang + 1, time.time()
 
-            # ---------------- gambar ----------------
             if gambar_lapangan:
                 layar.blit(gambar_lapangan, (0, 0))
             else:
                 layar.fill((0, 100, 0))
+            for d, gambar in zip(DINDING_TEPI, gambar_tepi):
+                if gambar:
+                    layar.blit(gambar, d.topleft)
+                else:
+                    pygame.draw.rect(layar, (160, 82, 45), d)
             for d, gambar in zip(DINDING, gambar_dinding):
                 if gambar:
                     layar.blit(gambar, d.topleft)
