@@ -12,7 +12,11 @@ Game dibuat dengan **pengolahan citra klasik**, bukan machine learning. Program 
 
 | File/folder | Kegunaan |
 |---|---|
-| `main.py` | Game, input kamera/keyboard, gerak bola, tabrakan, skor, dan tampilan. |
+| `main.py` | Alur game: gestur, skor, waktu, ronde, dan pemanggilan tampilan. |
+| `input_kamera.py` | Mengambil frame kamera dan menampilkan preview/mask. |
+| `lapangan.py` | Posisi spawn, bola, fisika, dan tabrakan. |
+| `aset_game.py` | Memuat aset dan menggambar panel serta panah bidik. |
+| `pengaturan.py` | Ukuran layar, tembok, dan nilai pengaturan permainan. |
 | `tangan.py` | Pembukaan kamera, konfigurasi, deteksi warna, hasil deteksi, dan pengenalan gestur. |
 | `kalibrasi.py` | Mengambil warna penanda dan mengatur area deteksi melalui kamera. |
 | `config.json` | Menyimpan kamera, batas warna HSV, ROI, dan jarak gestur hasil kalibrasi. |
@@ -67,7 +71,7 @@ ROI memperkecil area yang dicari agar warna serupa di latar lebih jarang terdete
 
 Perubahan status perlu terdeteksi selama beberapa frame (`KONFIRMASI = 3`) supaya satu frame yang keliru tidak langsung dianggap sebagai gerakan. Jika titik hilang, pembaca mencatat durasi kehilangan dan mempertahankan status sebentar.
 
-Arah bidik dihitung dari garis jempol ke telunjuk. Posisi telunjuk juga dinormalisasi di dalam ROI untuk input horizontal keyboard dan kompatibilitas gestur.
+Arah bidik dihitung dari garis jempol ke telunjuk. Posisi telunjuk dinormalisasi di dalam ROI agar rentang geraknya tetap konsisten.
 
 ## 5. Penjelasan `kalibrasi.py`
 
@@ -85,21 +89,23 @@ Gunakan kondisi cahaya, posisi kamera, dan penanda yang sama saat kalibrasi dan 
 
 ## 6. Penjelasan `main.py`
 
-### Pengaturan lapangan
+### Pengaturan dan modul pendukung
 
-`W` dan `H` mengatur ukuran area lapangan (800×600), sedangkan `HUD_HEIGHT` menambah ruang panel di atasnya. `FPS` mengatur target frame per detik. `R_BOLA` dan `R_LUBANG` menentukan radius objek untuk fisika. `DINDING` menyimpan persegi panjang rintangan di dalam lapangan; `DINDING_TEPI` menyimpan tembok pinggir. Ukuran dan posisi tembok bisa diubah di bagian pengaturan ini.
+Nilai ukuran layar, susunan tembok, waktu, serta kekuatan pukulan berada di `pengaturan.py`. `lapangan.py` mengatur spawn dan gerak bola. `aset_game.py` memuat gambar dan menggambar panel. `input_kamera.py` menangani video kamera dan preview.
+
+`W` dan `H` mengatur ukuran area lapangan (800×600), sedangkan `HUD_HEIGHT` menambah ruang panel di atasnya. `FPS` mengatur target frame per detik. `R_BOLA` dan `R_LUBANG` menentukan radius objek untuk fisika. `DINDING` menyimpan persegi panjang rintangan di dalam lapangan; `DINDING_TEPI` menyimpan tembok pinggir. Ukuran dan posisi tembok bisa diubah di `pengaturan.py`.
 
 Konstanta seperti `FRIKSI`, `RESTITUSI`, `MIN_POWER`, dan `MAX_POWER` mengatur perlambatan, pantulan, serta kekuatan tembakan.
 
 ### Posisi ronde dan aset
 
-- `posisi_spawn_aman(radius)` mencoba posisi acak di dalam tembok dan menolak posisi yang terlalu dekat dengan rintangan.
+- `posisi_spawn_aman(radius)` di `lapangan.py` mencoba posisi acak dan menolak posisi yang terlalu dekat dengan rintangan.
 - `spawn_ronde()` mencari posisi awal dan lubang yang tidak terlalu berdekatan.
-- `muat_aset(nama, ukuran)` memuat gambar dari `assets/` dan menyesuaikan ukurannya. Jika file tidak ada, fungsi mengembalikan `None`; game menggambar bentuk sederhana sebagai pengganti.
+- `muat_aset(nama, ukuran)` di `aset_game.py` memuat gambar dari `assets/` dan menyesuaikan ukurannya. Jika file tidak ada, game menggambar bentuk sederhana sebagai pengganti.
 
 ### Gerak dan tabrakan bola
 
-Kelas `Bola` menyimpan posisi (`pos`) dan kecepatan (`vel`) sebagai `pygame.Vector2`.
+Kelas `Bola` di `lapangan.py` menyimpan posisi (`pos`) dan kecepatan (`vel`) sebagai `pygame.Vector2`.
 
 - `diam` bernilai benar jika kecepatan bola nol.
 - `_pantul(normal)` membalik komponen kecepatan yang menuju permukaan, dengan besar pantulan dipengaruhi `RESTITUSI`.
@@ -109,10 +115,9 @@ Kelas `Bola` menyimpan posisi (`pos`) dan kecepatan (`vel`) sebagai `pygame.Vect
 
 ### Sumber input
 
-- `InputKamera` membaca konfigurasi, memeriksa kelengkapan kalibrasi, membuka kamera, membalik gambar secara horizontal, lalu mengirim frame ke `deteksi()` dan `PembacaGestur`. Preview menampilkan kamera dan mask agar deteksi bisa diperiksa.
-- `InputKeyboard` menjadi alternatif tanpa kamera. Panah kiri/kanan mengubah arah bidik dan tombol spasi mengisi power.
-- Keduanya menyediakan `baca()` dengan hasil bertipe `Gestur`, sehingga loop game tidak perlu mengetahui detail sumber input.
-- `tutup()` melepas sumber daya ketika permainan selesai.
+- `InputKamera` di `input_kamera.py` membaca konfigurasi, memeriksa kalibrasi, membuka kamera, membalik gambar, lalu mengirim frame ke `deteksi()` dan `PembacaGestur`. Preview menampilkan kamera dan mask.
+- `InputKamera` menyediakan hasil bertipe `Gestur` untuk loop game.
+- `tutup()` melepas kamera dan menutup preview ketika permainan selesai.
 
 ### Loop game
 
@@ -130,7 +135,7 @@ Kelas `Bola` menyimpan posisi (`pos`) dan kecepatan (`vel`) sebagai `pygame.Vect
 
 Blok `finally` memastikan kamera dan Pygame ditutup ketika game keluar, termasuk jika terjadi kesalahan saat loop berjalan.
 
-`main()` membaca pilihan command line. Tanpa pilihan, game memakai kamera. `--keyboard` menjalankan game tanpa kamera. `--tanpa-preview` menyembunyikan jendela preview kamera.
+`main()` menjalankan game dengan kamera. Opsi `--tanpa-preview` menyembunyikan jendela preview kamera.
 
 Status bidik, power, jarak, dan petunjuk gerakan ditampilkan di sisi mask pada preview kamera. Preview kamera dan mask berukuran ringkas agar dapat ditaruh berdampingan dengan jendela game. Panel babak, sisa pukulan, dan waktu berada di ruang atas lapangan; area lapangan tetap 800×600. Font panel dapat diganti dengan menaruh `font.ttf` di `assets/`; nama file diatur oleh `HUD_FONT_FILE` di `main.py`, dan font bawaan dipakai jika file tersebut tidak ditemukan.
 
@@ -153,7 +158,7 @@ Sebaiknya ubah nilai ini melalui `kalibrasi.py`. Nilai HSV dapat berbeda jika ka
 
 - **OpenCV (`cv2`)**: membaca kamera, mengolah gambar, mengubah warna, dan mencari kontur.
 - **NumPy**: mengolah array gambar dan perhitungan numerik.
-- **Pygame**: jendela game, gambar, input keyboard, waktu frame, dan vektor fisika.
+- **Pygame**: jendela game, gambar, waktu frame, dan vektor fisika.
 - **Modul standar Python**: `argparse` untuk pilihan jalankan, `random` untuk posisi ronde, `math` untuk perhitungan, `time` untuk waktu, dan `pathlib` untuk lokasi aset.
 
 ## 9. Urutan demo yang disarankan
@@ -164,7 +169,6 @@ Sebaiknya ubah nilai ini melalui `kalibrasi.py`. Nilai HSV dapat berbeda jika ka
 4. Jalankan game dan gerakkan telunjuk untuk membidik.
 5. Rapatkan jari untuk mengisi power, lalu buka untuk menembak.
 6. Tunjukkan bola memantul dari tembok dan masuk ke lubang.
-7. Sebutkan bahwa versi keyboard dapat dipakai jika kamera tidak tersedia.
 
 ## 10. Pertanyaan yang mungkin muncul
 
