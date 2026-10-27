@@ -1,12 +1,18 @@
-# Mini-Golf Tangan
+# MINI GAME BASED ON HAND COLOR
 
-Proyek ini adalah game mini-golf yang dimainkan dengan gerakan jari di depan kamera. Game juga bisa dicoba dengan keyboard.
+- **Nama:** Muhammad Sayyid Tsabit
+- **NRP:** 5024241013
+- **Mata kuliah:** Pengolahan Sinyal Digital
 
-## Cara kerja
+Proyek ini adalah game mini-golf yang sepenuhnya dikendalikan dengan gerakan jari yang ditangkap kamera.
 
-Kamera melacak penanda dengan warna berbeda pada telunjuk dan jempol. OpenCV mengubah gambar ke HSV, lalu mencari warna penanda di area yang sudah dipilih. Posisi kedua penanda dipakai untuk menentukan arah bidik, sedangkan jaraknya dipakai untuk mengenali jari terbuka atau dirapatkan.
+## Pengolahan citra dan video
 
-Saat jari dirapatkan, power terisi. Saat dibuka kembali, bola ditembakkan. Bola bergerak dan memantul dari tembok menggunakan simulasi sederhana di Pygame.
+Kamera menghasilkan video berupa rangkaian frame. Program memproses setiap frame menggunakan OpenCV. Frame dihaluskan untuk mengurangi noise, diubah dari BGR ke HSV, lalu dibatasi pada area deteksi (ROI). HSV digunakan agar warna penanda lebih mudah dipisahkan dari latar.
+
+Program membuat mask berdasarkan rentang warna penanda telunjuk dan jempol yang disimpan saat kalibrasi. Mask dibersihkan dengan operasi morfologi, lalu kontur terbesar dicari untuk mendapatkan titik tengah masing-masing penanda. Jarak dan posisi titik dari frame digunakan untuk membaca gestur dan arah bidik.
+
+Saat jari dirapatkan, kekuatan pukulan terisi. Saat jari dibuka kembali, bola ditembakkan. Gerakan bola dan tampilan permainan dijalankan menggunakan Pygame.
 
 Permainan dimulai dengan waktu 1 menit dan batas 9 pukulan. Setiap bola yang masuk menambah waktu 20 detik. Permainan selesai jika waktu habis atau batas pukulan tercapai.
 
@@ -29,14 +35,6 @@ Jalankan game:
 ```bash
 python main.py
 ```
-
-Untuk mencoba tanpa kamera:
-
-```bash
-python main.py --keyboard
-```
-
-Pada mode keyboard, gunakan panah kiri/kanan untuk membidik dan tahan spasi untuk mengisi power. Tekan Esc untuk keluar.
 
 ## Aset
 
