@@ -46,6 +46,6 @@ Simpan gambar PNG di folder `assets/`:
 - `tembok.png` untuk tembok
 - `babak.png`, `sisapukulan.png`, dan `waktu.png` untuk panel informasi game
 
-Panel babak, sisa pukulan, dan waktu berada di area atas jendela game; ukuran lapangannya tetap 800×600. Preview kamera dan mask dibuat ringkas dan ditampilkan berdampingan dengan game.
+Panel babak, sisa pukulan, dan waktu berada di area atas jendela game; ukuran lapangannya tetap 800×600. Preview kamera dan mask berukuran 480×360, seperti saat kalibrasi, dan ditampilkan berdampingan dengan game. Nilai jarak pada preview dihitung dari deteksi frame yang sama, bukan dari ukuran tampilan preview.
 
 Tambahkan `font.ttf` di folder `assets/` jika ingin memakai font khusus pada panel game. Jika tidak ada, game memakai font bawaan Pygame. Gambar aset yang tidak tersedia akan memakai tampilan sederhana sebagai pengganti.

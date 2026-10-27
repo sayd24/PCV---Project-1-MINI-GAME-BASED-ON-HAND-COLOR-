@@ -6,10 +6,11 @@ import numpy as np
 
 from tangan import (buka_kamera, deteksi, gambar_hasil, load_config,
                     save_config)
+from pengaturan import PREVIEW_SIZE
 
 WINDOW = "Kalibrasi dua jari"
 FONT = cv2.FONT_HERSHEY_SIMPLEX
-DISP_W, DISP_H = 480, 360
+DISP_W, DISP_H = PREVIEW_SIZE
 TRACKBARS = (
     ("roi_atas", "ROI atas %", 95),
     ("roi_bawah", "ROI bawah %", 100),

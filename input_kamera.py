@@ -40,13 +40,16 @@ class InputKamera:
         if hasil.mask_jempol is not None:
             mask[hasil.mask_jempol > 0] = (220, 0, 220)
         mask = cv2.resize(mask, PREVIEW_SIZE)
-        cv2.putText(mask, status, (8, 25), cv2.FONT_HERSHEY_SIMPLEX, 0.65, (0, 255, 255), 2)
-        cv2.putText(mask, f"Jarak: {hasil.jarak_norm:.3f}", (8, 52),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
-        cv2.putText(mask, "Hijau: telunjuk | Ungu: jempol", (6, 151),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.32, (255, 255, 255), 1)
-        cv2.putText(mask, "Rapatkan: isi power | Buka: tembak", (6, 172),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.29, (255, 255, 255), 1)
+        cv2.putText(preview, status, (8, 22), cv2.FONT_HERSHEY_SIMPLEX, 0.48,
+                    (255, 255, 255), 1)
+        jarak = f"{hasil.jarak_norm:.3f}" if hasil.ada else "--"
+        cv2.putText(preview, f"Telunjuk OK | Jempol OK | jarak {jarak}",
+                    (8, 44), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (0, 255, 255), 1)
+        cv2.putText(mask, "Mask: hijau=telunjuk, ungu=jempol",
+                    (8, 22), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (255, 255, 255), 1)
+        cv2.putText(mask, "Rapatkan: isi power | Buka: tembak",
+                    (8, PREVIEW_SIZE[1] - 12), cv2.FONT_HERSHEY_SIMPLEX, 0.43,
+                    (255, 255, 255), 1)
         cv2.imshow("Kamera", np.hstack((preview, mask)))
         if not self.jendela_dibuka:
             cv2.moveWindow("Kamera", W + 16, 0)
